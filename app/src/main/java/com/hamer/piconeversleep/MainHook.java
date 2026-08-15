@@ -26,7 +26,7 @@ public final class MainHook implements IXposedHookLoadPackage {
     private static final String TAG = "PicoNeverSleep";
     private static final String SETTINGS_PACKAGE = "com.picovr.settings";
     private static final int NEVER_SLEEP_TILE = 9001;
-    private static final String PROP_NEVER_SLEEP = "persist.pvr.factorytest.never.sleep";
+    private static final String SETTING_NEVER_SLEEP = "pvr_never_sleep_enabled";
     private static final String PROP_NEVER_SLEEP_VOLATILE = "pvr.factorytest.never.sleep";
     private static final String MODULE_PACKAGE = "com.hamer.piconeversleep";
     
@@ -34,6 +34,11 @@ public final class MainHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) {
+        if ("android".equals(lp.packageName)) {
+            XposedBridge.log(TAG + ": Hooking android");
+            hookSystemReady(lp);
+        }
+
         if (!SETTINGS_PACKAGE.equals(lp.packageName)) return;
         
         XposedBridge.log(TAG + ": Hooking " + lp.packageName);
@@ -102,6 +107,42 @@ public final class MainHook implements IXposedHookLoadPackage {
         }
     }
 
+    private void hookSystemReady(XC_LoadPackage.LoadPackageParam lp) {
+        try {
+            XposedHelpers.findAndHookMethod("com.android.server.SystemServiceManager", lp.classLoader,
+                    "startBootPhase", int.class, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            int phase = (int) param.args[0];
+                            if (phase == 600 || phase == 1000) { // PHASE_BOOT_COMPLETED or PHASE_SYSTEM_SERVICES_READY
+                                XposedBridge.log(TAG + ": Boot phase " + phase + " reached, syncing props");
+                                final Context context;
+                                Object mContext = XposedHelpers.getObjectField(param.thisObject, "mContext");
+                                if (mContext instanceof Context) {
+                                    context = (Context) mContext;
+                                } else {
+                                     context = null;
+                                }
+
+                                if (context != null) {
+                                    syncProps(context);
+                                    // Also sync after a short delay to override vendor resets
+                                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            XposedBridge.log(TAG + ": Delayed sync after boot");
+                                            syncProps(context);
+                                        }
+                                    }, 10000); // 10 seconds delay
+                                }
+                            }
+                        }
+                    });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Failed to hook startBootPhase: " + t);
+        }
+    }
+
     private Object quickPanelCallback(final Object original, Class<?> callbackClass, final ClassLoader cl) {
         return Proxy.newProxyInstance(cl, new Class<?>[]{callbackClass}, new InvocationHandler() {
             @Override
@@ -156,12 +197,13 @@ public final class MainHook implements IXposedHookLoadPackage {
             button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    toggleNeverSleep();
+                    toggleNeverSleep(context);
                     refreshTile(context);
                 }
             });
             
             sButton = button;
+            syncProps(context);
             button.post(new Runnable() {
                 @Override
                 public void run() {
@@ -173,16 +215,30 @@ public final class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private void toggleNeverSleep() {
-        boolean enabled = isNeverSleepEnabled();
+    private void toggleNeverSleep(Context context) {
+        boolean enabled = isNeverSleepEnabled(context);
         String val = enabled ? "0" : "1";
-        setProp(PROP_NEVER_SLEEP, val);
+        putGlobalInt(context, SETTING_NEVER_SLEEP, enabled ? 0 : 1);
         setProp(PROP_NEVER_SLEEP_VOLATILE, val);
         XposedBridge.log(TAG + ": Never Sleep toggled to " + (!enabled));
     }
 
-    private boolean isNeverSleepEnabled() {
-        return "1".equals(getProp(PROP_NEVER_SLEEP, "0")) || "1".equals(getProp(PROP_NEVER_SLEEP_VOLATILE, "0"));
+    private void syncProps(Context context) {
+        try {
+            int enabled = getGlobalInt(context, SETTING_NEVER_SLEEP, 0);
+            String val = String.valueOf(enabled);
+            String volatileVal = getProp(PROP_NEVER_SLEEP_VOLATILE, "0");
+            if (!val.equals(volatileVal)) {
+                setProp(PROP_NEVER_SLEEP_VOLATILE, val);
+                XposedBridge.log(TAG + ": Synced volatile prop to " + val);
+            }
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": syncProps failed: " + t);
+        }
+    }
+
+    private boolean isNeverSleepEnabled(Context context) {
+        return getGlobalInt(context, SETTING_NEVER_SLEEP, 0) == 1;
     }
 
     private void refreshTile(Context context) {
@@ -190,7 +246,7 @@ public final class MainHook implements IXposedHookLoadPackage {
             Object button = sButton;
             if (button == null) return;
 
-            boolean enabled = isNeverSleepEnabled();
+            boolean enabled = isNeverSleepEnabled(context);
             // 'h' likely sets the active/checked state of the button
             XposedHelpers.callMethod(button, "h", enabled);
             XposedHelpers.callMethod(button, "setTipText", getModuleString(context, "never_sleep"));
@@ -268,6 +324,26 @@ public final class MainHook implements IXposedHookLoadPackage {
                 XposedHelpers.findClass("android.os.SystemProperties", null), "set", key, val);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": setProp failed: " + t);
+        }
+    }
+
+    private int getGlobalInt(Context c, String k, int d) {
+        try {
+            return (Integer) XposedHelpers.callStaticMethod(
+                XposedHelpers.findClass("android.provider.Settings$Global", null),
+                "getInt", c.getContentResolver(), k, d);
+        } catch (Throwable t) {
+            return d;
+        }
+    }
+
+    private void putGlobalInt(Context c, String k, int v) {
+        try {
+            XposedHelpers.callStaticMethod(
+                XposedHelpers.findClass("android.provider.Settings$Global", null),
+                "putInt", c.getContentResolver(), k, v);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": setting write failed " + k + ": " + t);
         }
     }
 }
