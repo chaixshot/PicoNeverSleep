@@ -193,7 +193,7 @@ public final class MainHook implements IXposedHookLoadPackage {
             boolean enabled = isNeverSleepEnabled();
             // 'h' likely sets the active/checked state of the button
             XposedHelpers.callMethod(button, "h", enabled);
-            XposedHelpers.callMethod(button, "setTipText", "Never Sleep");
+            XposedHelpers.callMethod(button, "setTipText", getModuleString(context, "never_sleep"));
 
             ImageView iconView = findImageView((View) button);
             if (iconView != null) {
@@ -240,6 +240,17 @@ public final class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": Failed to load module icon: " + t);
         }
         return null;
+    }
+
+    private String getModuleString(Context context, String name) {
+        try {
+            Context moduleContext = context.createPackageContext(MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
+            int id = moduleContext.getResources().getIdentifier(name, "string", MODULE_PACKAGE);
+            if (id != 0) return moduleContext.getString(id);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Failed to load module string: " + t);
+        }
+        return "Never Sleep";
     }
 
     private String getProp(String key, String def) {
