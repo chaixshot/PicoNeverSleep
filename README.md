@@ -1,8 +1,11 @@
 <div align="center">
-<img src="/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp" width="128" height="128"/>
+   <img src="/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp" width="256" height="256"/>
 
-### Add a "Never Sleep" quick setting button to your Pico VR headset.
-PicoNeverSleep is an LSPosed module designed for Pico VR headsets that adds a dedicated "Never Sleep" toggle to the Quick Settings panel. It allows you to keep the screen on indefinitely with a single tap, perfect for testing, watching long videos, or unattended downloads.
+   # PicoNeverSleep
+   [English](README.md) | [中文](README_zh.md) | [Русский](README_ru.md)
+   
+   ### Add a "Never Sleep" quick setting button to your Pico VR headset.
+   PicoNeverSleep is an LSPosed module designed for Pico VR headsets that adds a dedicated "Never Sleep" toggle to the Quick Settings panel. It allows you to keep the screen on indefinitely with a single tap, perfect for testing, watching long videos, or unattended downloads.
 </div>
 
 ## 👓 Screenshot
