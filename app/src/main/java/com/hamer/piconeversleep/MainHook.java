@@ -261,8 +261,8 @@ public final class MainHook implements IXposedHookLoadPackage {
                     ViewGroup.LayoutParams lp = iconView.getLayoutParams();
                     if (lp != null) {
                         float density = context.getResources().getDisplayMetrics().density;
-                        lp.width = (int) (33 * density);
-                        lp.height = (int) (33 * density);
+                        lp.width = (int) (55 * density);
+                        lp.height = (int) (55 * density);
                         iconView.setLayoutParams(lp);
                     }
                     iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
