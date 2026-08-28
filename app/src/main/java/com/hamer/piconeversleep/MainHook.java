@@ -344,8 +344,14 @@ public final class MainHook implements IXposedHookLoadPackage {
             View.OnClickListener listener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    toggleNeverSleep(context);
-                    refreshTile(context);
+                    final boolean nextState = !isNeverSleepEnabled(context);
+                    refreshTile(context, nextState);
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            toggleNeverSleep(context, nextState);
+                        }
+                    }).start();
                 }
             };
             button.setOnClickListener(listener);
@@ -367,9 +373,8 @@ public final class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private void toggleNeverSleep(Context context) {
-        boolean enabled = isNeverSleepEnabled(context);
-        if (!enabled) {
+    private void toggleNeverSleep(Context context, boolean targetEnabled) {
+        if (targetEnabled) {
             boolean vsleepActive = getGlobalInt(context, VSLEEP_ENABLED_KEY, 0) == 1
                     && "vsleep".equals(getGlobalString(context, COORD_OWNER))
                     && "active".equals(getGlobalString(context, COORD_PHASE));
@@ -416,31 +421,51 @@ public final class MainHook implements IXposedHookLoadPackage {
     }
 
     private void refreshTile(Context context) {
+        refreshTile(context, null);
+    }
+
+    private void refreshTile(final Context context, final Boolean forcedState) {
         try {
-            Object button = sButton;
+            final Object button = sButton;
             if (button == null) return;
 
-            boolean enabled = isNeverSleepEnabled(context);
-            // 'h' likely sets the active/checked state of the button
-            XposedHelpers.callMethod(button, "h", enabled);
-            XposedHelpers.callMethod(button, "setTipText", getModuleString(context, "never_sleep"));
+            final boolean enabled = (forcedState != null) ? forcedState : isNeverSleepEnabled(context);
 
-            ImageView iconView = findImageView((View) button);
-            if (iconView != null) {
-                Drawable drawable = getModuleDrawable(context);
-                if (drawable != null) {
-                    iconView.setBackground(null);
-                    iconView.setImageDrawable(drawable);
-                    
-                    ViewGroup.LayoutParams lp = iconView.getLayoutParams();
-                    if (lp != null) {
-                        float density = context.getResources().getDisplayMetrics().density;
-                        lp.width = (int) (55 * density);
-                        lp.height = (int) (55 * density);
-                        iconView.setLayoutParams(lp);
+            Runnable updateTask = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        // 'h' likely sets the active/checked state of the button
+                        XposedHelpers.callMethod(button, "h", enabled);
+                        XposedHelpers.callMethod(button, "setTipText", getModuleString(context, "never_sleep"));
+
+                        ImageView iconView = findImageView((View) button);
+                        if (iconView != null) {
+                            Drawable drawable = getModuleDrawable(context);
+                            if (drawable != null) {
+                                iconView.setBackground(null);
+                                iconView.setImageDrawable(drawable);
+
+                                ViewGroup.LayoutParams lp = iconView.getLayoutParams();
+                                if (lp != null) {
+                                    float density = context.getResources().getDisplayMetrics().density;
+                                    lp.width = (int) (55 * density);
+                                    lp.height = (int) (55 * density);
+                                    iconView.setLayoutParams(lp);
+                                }
+                                iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                            }
+                        }
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + ": refreshTile UI update failed: " + t);
                     }
-                    iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 }
+            };
+
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                updateTask.run();
+            } else {
+                ((View) button).post(updateTask);
             }
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": refreshTile failed: " + t);
