@@ -20,6 +20,7 @@
 ## ⛏️ 前置条件
 * **设备：** Pico 4 头显（支持中国版/国际版固件）。
 * **权限：** 需要 **[Root 权限](https://pico4.wiki/guides/root/01-root/)** 才能将更改应用于系统文件。
+   * 推荐使用 [picounlock](https://github.com/chaixshot/more-picohaxx)
 * **环境：** 必须安装并激活 **[LSPosed 框架](https://github.com/JingMatrix/Vector/releases/tag/v2.0)**。
 * **作用域：** 在 LSPosed 管理器中必须勾选 **系统框架 (android)** 和 **PicoVR 设置 (com.picovr.settings)**。
 
