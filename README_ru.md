@@ -20,6 +20,7 @@
 ## ⛏️ Предварительные условия
 * **Устройство:** Шлем Pico 4 (поддерживаются прошивки Phoenix/Китай).
 * **Разрешения:** Требуется **[Root-доступ](https://pico4.wiki/guides/root/01-root/)** для внесения изменений в системные файлы.
+   * Рекомендуется использовать [picounlock](https://github.com/chaixshot/more-picohaxx)
 * **Среда:** Должен быть установлен и активен **[LSPosed Framework](https://github.com/JingMatrix/Vector/releases/tag/v2.0)**.
 * **Область (Scope):** В менеджере LSPosed должны быть выбраны как **System Framework (android)**, так и **PicoVR Settings (com.picovr.settings)**.
 
