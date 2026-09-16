@@ -2,10 +2,14 @@ package com.hamer.piconeversleep;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -206,16 +210,16 @@ public final class MainHook implements IXposedHookLoadPackage {
     }
     private static void bindEditorTile(Object adapter, Object holder, int position) {
         try {
-            java.lang.reflect.Field data = adapter.getClass().getDeclaredField("b");
+            Field data = adapter.getClass().getDeclaredField("b");
             data.setAccessible(true);
             List<?> list = (List<?>) data.get(adapter);
             if (position < 0 || position >= list.size() || panelType(list.get(position)) != NEVER_SLEEP_TILE) return;
             boolean isAdded = holder.getClass().getName().contains("Added");
-            java.lang.reflect.Field text = holder.getClass().getDeclaredField(isAdded ? "d" : "c");
+            Field text = holder.getClass().getDeclaredField(isAdded ? "d" : "c");
             text.setAccessible(true);
             Object label = text.get(holder);
             label.getClass().getMethod("setText", CharSequence.class).invoke(label, "Never Sleep");
-            java.lang.reflect.Field image = holder.getClass().getDeclaredField(isAdded ? "c" : "b");
+            Field image = holder.getClass().getDeclaredField(isAdded ? "c" : "b");
             image.setAccessible(true);
             Object imageView = image.get(holder);
             Drawable drawable = getModuleDrawable((Context) currentApplication());
@@ -243,7 +247,7 @@ public final class MainHook implements IXposedHookLoadPackage {
                                 if (context != null) {
                                     syncProps(context);
                                     // Also sync after a short delay to override vendor resets
-                                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                                    new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
                                         @Override
                                         public void run() {
                                             XposedBridge.log(TAG + ": Delayed sync after boot");
@@ -383,11 +387,57 @@ public final class MainHook implements IXposedHookLoadPackage {
             putGlobalInt(context, SETTING_NEVER_SLEEP, 1);
             setProp(PROP_NEVER_SLEEP_VOLATILE, "1");
             XposedBridge.log(TAG + ": Never Sleep enabled; previous V-Sleep=" + vsleepActive);
+            setDisplayPowerState(false);
         } else {
             putGlobalInt(context, SETTING_NEVER_SLEEP, 0);
             setProp(PROP_NEVER_SLEEP_VOLATILE, "0");
             requestPowerOwner(context, "disable");
             XposedBridge.log(TAG + ": Never Sleep disabled; released power owner");
+            setDisplayPowerState(true);
+        }
+    }
+
+    private void setDisplayPowerState(boolean on) {
+        try {
+            Class<?> surfaceControl = Class.forName("android.view.SurfaceControl");
+            IBinder token = null;
+
+            // Try getInternalDisplayToken (Android 11+)
+            try {
+                Method getInternalToken = surfaceControl.getMethod("getInternalDisplayToken");
+                token = (IBinder) getInternalToken.invoke(null);
+            } catch (Throwable ignored) {}
+
+            // Try getBuiltInDisplay (Android 10 and below)
+            if (token == null) {
+                try {
+                    Method getBuiltInDisplay = surfaceControl.getMethod("getBuiltInDisplay", int.class);
+                    token = (IBinder) getBuiltInDisplay.invoke(null, 0); // 0 = BUILT_IN_DISPLAY_ID_MAIN
+                } catch (Throwable ignored) {}
+            }
+
+            // Fallback for Android 14+ or physical IDs
+            if (token == null) {
+                try {
+                    Method getPhysicalDisplayIds = surfaceControl.getMethod("getPhysicalDisplayIds");
+                    long[] ids = (long[]) getPhysicalDisplayIds.invoke(null);
+                    if (ids != null && ids.length > 0) {
+                        Method getPhysicalDisplayToken = surfaceControl.getMethod("getPhysicalDisplayToken", long.class);
+                        token = (IBinder) getPhysicalDisplayToken.invoke(null, ids[0]);
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            if (token != null) {
+                Method setDisplayPowerMode = surfaceControl.getMethod("setDisplayPowerMode", IBinder.class, int.class);
+                int mode = on ? 2 : 0; // 2 = POWER_MODE_NORMAL, 0 = POWER_MODE_OFF
+                setDisplayPowerMode.invoke(null, token, mode);
+                XposedBridge.log(TAG + ": setDisplayPowerMode invoked successfully, mode=" + mode);
+            } else {
+                XposedBridge.log(TAG + ": Could not obtain display token via reflection");
+            }
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": setDisplayPowerState failed: " + t);
         }
     }
 
@@ -462,7 +512,7 @@ public final class MainHook implements IXposedHookLoadPackage {
                 }
             };
 
-            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
                 updateTask.run();
             } else {
                 ((View) button).post(updateTask);
