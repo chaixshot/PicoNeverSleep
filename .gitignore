@@ -55,3 +55,4 @@ fabric.properties
 # Artifacts & Scratch
 .artifacts/
 scratch/
+/app/release
