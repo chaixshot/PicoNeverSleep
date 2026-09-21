@@ -51,14 +51,10 @@ public final class MainHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) {
-        if ("android".equals(lp.packageName)) {
-            XposedBridge.log(TAG + ": Hooking android");
-            hookSystemReady(lp);
-        }
-
         if (!SETTINGS_PACKAGE.equals(lp.packageName)) return;
 
         XposedBridge.log(TAG + ": Hooking " + lp.packageName);
+        hookSystemReady(lp);
 
         try {
             final Class<?> adapterClass = XposedHelpers.findClass("com.picovr.quicksettings.ButtonListAdapter", lp.classLoader);
@@ -290,37 +286,26 @@ public final class MainHook implements IXposedHookLoadPackage {
 
     private void hookSystemReady(XC_LoadPackage.LoadPackageParam lp) {
         try {
-            XposedHelpers.findAndHookMethod("com.android.server.SystemServiceManager", lp.classLoader,
-                    "startBootPhase", int.class, new XC_MethodHook() {
+            XposedHelpers.findAndHookMethod("android.app.Application", lp.classLoader,
+                    "onCreate", new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            int phase = (int) param.args[0];
-                            if (phase == 600 || phase == 1000) { // PHASE_BOOT_COMPLETED or PHASE_SYSTEM_SERVICES_READY
-                                XposedBridge.log(TAG + ": Boot phase " + phase + " reached, syncing props");
-                                final Context context;
-                                Object mContext = XposedHelpers.getObjectField(param.thisObject, "mContext");
-                                if (mContext instanceof Context) {
-                                    context = (Context) mContext;
-                                } else {
-                                    context = null;
-                                }
+                            final Context context = (Context) param.thisObject;
+                            XposedBridge.log(TAG + ": Application onCreate reached, syncing props");
+                            syncProps(context);
 
-                                if (context != null) {
+                            // Sync after a short delay to override possible vendor resets
+                            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    XposedBridge.log(TAG + ": Delayed sync after Application start");
                                     syncProps(context);
-                                    // Also sync after a short delay to override vendor resets
-                                    new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            XposedBridge.log(TAG + ": Delayed sync after boot");
-                                            syncProps(context);
-                                        }
-                                    }, 10000); // 10 seconds delay
                                 }
-                            }
+                            }, 5000);
                         }
                     });
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": Failed to hook startBootPhase: " + t);
+            XposedBridge.log(TAG + ": Failed to hook Application onCreate: " + t);
         }
     }
 
