@@ -17,10 +17,11 @@ PicoNeverSleep is an LSPosed module designed for Pico VR headsets that adds a de
 
 ## 🌟 Key Features
 
-* **🌙 Never Sleep Toggle:** Easily prevent your headset from going to sleep directly from the Quick Settings.
-* **🔄 Persistent After Reboot:** Automatically restores your "Never Sleep" state after the device restarts by hooking into the system boot phase.
-* **🌐 Multi-language Support:** Fully localized in 27+ languages including English, Chinese, Japanese, Korean, and many European languages.
-* **🧹 Clean & Focused:** Single-purpose module with no unnecessary features or background battery drain.
+* **Never Sleep Toggle:** Easily prevent your headset from going to sleep directly from the Quick Settings.
+* **Persistent After Reboot:** Automatically restores your "Never Sleep" state after the device restarts by hooking into the system boot phase.
+* **Auto Screen Off**: Turn off screen automatically but not sleep base on Psensor and default system timeout config.
+* **Multi-language Support:** Fully localized in 27+ languages including English, Chinese, Japanese, Korean, and many European languages.
+* **Clean & Focused:** Single-purpose module with no unnecessary features or background battery drain.
 
 ## ⛏️ Prerequisites
 
@@ -28,14 +29,14 @@ PicoNeverSleep is an LSPosed module designed for Pico VR headsets that adds a de
 * **Superuser:** **[Root Access](https://github.com/chaixshot/more-picohaxx)** is required to apply changes to system files.
 * **Environment:** **[LSPosed Framework](https://github.com/JingMatrix/Vector/releases/tag/v2.0)** must be installed and active.
 * **Permission:** Grant root access when prompted by the app.
-* **LSPosed Scope:** Ensure `System Framework (android)` and `PicoVR Settings (com.picovr.settings)` are selected in the LSPosed module scope.
+* **LSPosed Scope:** Ensure `PicoVR Settings (com.picovr.settings)` are selected in the LSPosed module scope.
 
 ## 📐 How to use?
 
 1. **Install** the `PicoNeverSleep.apk` on your headset.
 2. **Open** the LSPosed Manager app.
 3. **Enable** the PicoNeverSleep module.
-4. **Check the Scopes:** Ensure both `System Framework` and `PicoVR Settings` are checked.
+4. **Check the Scopes:** Ensure `PicoVR Settings` is checked.
 5. **Reboot** your device to activate the hooks.
 6. **Usage:**
     * Open your Quick Settings panel (click the clock/battery area in the dock).
