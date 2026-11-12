@@ -277,9 +277,11 @@ public final class MainHook implements IXposedHookLoadPackage {
             Field image = holder.getClass().getDeclaredField(isAdded ? "c" : "b");
             image.setAccessible(true);
             Object imageView = image.get(holder);
-            Drawable drawable = getModuleDrawable((Context) currentApplication());
-            if (drawable != null)
+            Drawable drawable = getEditorModuleDrawable((Context) currentApplication());
+            if (drawable != null) {
                 imageView.getClass().getMethod("setImageDrawable", Drawable.class).invoke(imageView, drawable);
+                imageView.getClass().getMethod("setScaleType", ImageView.ScaleType.class).invoke(imageView, ImageView.ScaleType.CENTER_INSIDE);
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -674,6 +676,14 @@ public final class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": Failed to load module icon: " + t);
         }
         return null;
+    }
+
+    private static Drawable getEditorModuleDrawable(Context context) {
+        Drawable drawable = getModuleDrawable(context);
+        if (drawable != null && Build.VERSION.SDK_INT >= 21) {
+            return new android.graphics.drawable.InsetDrawable(drawable, -0.25f, -0.25f, -0.25f, -0.25f);
+        }
+        return drawable;
     }
 
     private String getModuleString(Context context, String name) {
