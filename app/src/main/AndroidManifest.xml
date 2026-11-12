@@ -17,7 +17,7 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="PicoNeverSleep LSPosed Module" />
+            android:value="Add the never-sleep shortcut to quick-setting panel to allow the headset to stay awake." />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
