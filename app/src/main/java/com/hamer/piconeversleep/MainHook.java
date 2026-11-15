@@ -46,7 +46,6 @@ public final class MainHook implements IXposedHookLoadPackage {
     private static final String MODULE_PACKAGE = "com.hamer.piconeversleep";
 
     private static volatile Object sButton;
-    private static volatile Thread sMonitorThread = null;
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) {
@@ -438,88 +437,79 @@ public final class MainHook implements IXposedHookLoadPackage {
             putGlobalInt(context, SETTING_NEVER_SLEEP, 1);
             setProp(PROP_NEVER_SLEEP_VOLATILE, "1");
             XposedBridge.log(TAG + ": Never Sleep enabled; previous V-Sleep=" + vsleepActive);
-            startPsensorMonitor(context);
+            startGuardianDaemon(context);
         } else {
             putGlobalInt(context, SETTING_NEVER_SLEEP, 0);
             setProp(PROP_NEVER_SLEEP_VOLATILE, "0");
             requestPowerOwner(context, "disable");
             XposedBridge.log(TAG + ": Never Sleep disabled; released power owner");
-            stopPsensorMonitor();
+            stopGuardianDaemon();
             setDisplayPowerState(true);
         }
     }
 
-    private synchronized void startPsensorMonitor(final Context context) {
-        if (sMonitorThread != null) return;
-        sMonitorThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                XposedBridge.log(TAG + ": Psensor monitor thread started");
-                boolean screenIsOff = false;
-                long sensorZeroStartTime = 0;
+    private void startGuardianDaemon(Context context) {
+        try {
+            Context moduleContext = context.createPackageContext(MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
+            String settingsApk = context.getApplicationInfo().publicSourceDir;
+            String moduleApk = moduleContext.getApplicationInfo().publicSourceDir;
+            String classPath = settingsApk + ":" + moduleApk;
 
-                while (!Thread.currentThread().isInterrupted() && isNeverSleepEnabled(context)) {
-                    try {
-                        String statusStr = getProp("sys.pxr.psensor.status", "1");
-                        int status = 0;
-                        try {
-                            status = Integer.parseInt(statusStr);
-                        } catch (Throwable ignored) {
-                        }
+            // Terminate any stale GuardianDaemon instances and launch the fresh root daemon process using app_process with combined classpath
+            String cmd = "pkill -f 'com.hamer.piconeversleep.GuardianDaemon' 2>/dev/null || true; sleep 0.3; " +
+                    "exec app_process -Djava.class.path=\"" + classPath + "\" /system/bin com.hamer.piconeversleep.GuardianDaemon &";
 
-                        if (status == 1) {
-                            if (sensorZeroStartTime == 0) {
-                                sensorZeroStartTime = System.currentTimeMillis();
-                            }
-
-                            String delayStr = getProp("persist.psensor.screenoff.delay", "0");
-                            long delayMs = 0;
-                            try {
-                                delayMs = Long.parseLong(delayStr) * 1000L;
-                            } catch (Throwable ignored) {
-                            }
-                            if (delayMs < 0) delayMs = 0;
-
-                            boolean shouldTurnOff = "65535".equals(delayStr) || (System.currentTimeMillis() - sensorZeroStartTime >= delayMs);
-                            if (!screenIsOff && shouldTurnOff) {
-                                // If delay is 65535, we skip blanking the screen completely
-                                if (!"65535".equals(delayStr)) {
-                                    setDisplayPowerState(false);
-                                    screenIsOff = true;
-                                }
-                            }
-                        } else {
-                            sensorZeroStartTime = 0;
-                            if (screenIsOff) {
-                                setDisplayPowerState(true);
-                                screenIsOff = false;
-                            }
-                        }
-
-                        Thread.sleep(500L);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    } catch (Throwable t) {
-                        XposedBridge.log(TAG + ": Error in psensor monitor loop: " + t);
-                        try {
-                            Thread.sleep(2000L);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-                }
-                XposedBridge.log(TAG + ": Psensor monitor thread stopped");
+            Process process = Runtime.getRuntime().exec("su");
+            try (java.io.DataOutputStream os = new java.io.DataOutputStream(process.getOutputStream())) {
+                os.writeBytes(cmd + "\n");
+                os.writeBytes("exit\n");
+                os.flush();
             }
-        });
-        sMonitorThread.start();
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                String errorMsg = "Please grant <b>[SharedUID] Android System</b> access from the <b>Magisk</b> app in the <b>Superuser</b> tab.";
+                XposedBridge.log(TAG + ": " + errorMsg);
+                showToast(context, errorMsg);
+            } else {
+                XposedBridge.log(TAG + ": GuardianDaemon started via app_process using settings & module classpath");
+            }
+        } catch (Throwable t) {
+            String errorMsg = "Never Sleep: " + t.getMessage();
+            XposedBridge.log(TAG + ": " + errorMsg);
+            showToast(context, errorMsg);
+        }
     }
 
-    private synchronized void stopPsensorMonitor() {
-        if (sMonitorThread != null) {
-            sMonitorThread.interrupt();
-            sMonitorThread = null;
+    private void showToast(final Context context, final String htmlMessage) {
+        try {
+            final Handler handler = new Handler(Looper.getMainLooper());
+            for (int i = 0; i < 3; i++) {
+                final long delay = i * 3500L;
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            CharSequence text = Build.VERSION.SDK_INT >= 24
+                                    ? android.text.Html.fromHtml(htmlMessage, android.text.Html.FROM_HTML_MODE_LEGACY)
+                                    : android.text.Html.fromHtml(htmlMessage);
+                            android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }, delay);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+
+    private void stopGuardianDaemon() {
+        try {
+            Process process = Runtime.getRuntime().exec(new String[]{"su", "-c", "pkill -f 'com.hamer.piconeversleep.GuardianDaemon'"});
+            process.waitFor();
+            XposedBridge.log(TAG + ": GuardianDaemon stopped");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Failed to stop GuardianDaemon: " + t);
         }
     }
 
@@ -582,9 +572,12 @@ public final class MainHook implements IXposedHookLoadPackage {
             String volatileVal = getProp(PROP_NEVER_SLEEP_VOLATILE, "0");
             if (!val.equals(volatileVal)) {
                 setProp(PROP_NEVER_SLEEP_VOLATILE, val);
-                if (isNeverSleepEnabled(context))
-                    startPsensorMonitor(context);
                 XposedBridge.log(TAG + ": Synced volatile prop to " + val);
+            }
+            if (isNeverSleepEnabled(context)) {
+                startGuardianDaemon(context);
+            } else {
+                stopGuardianDaemon();
             }
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": syncProps failed: " + t);

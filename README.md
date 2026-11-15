@@ -38,7 +38,8 @@ PicoNeverSleep is an LSPosed module designed for Pico VR headsets that adds a de
 3. **Enable** the PicoNeverSleep module.
 4. **Check the Scopes:** Ensure `PicoVR Settings` is checked.
 5. **Reboot** your device to activate the hooks.
-6. **Usage:**
+6. **Magisk Superuser:** Open the **Magisk** app, go to the **Superuser** tab, and grant root access to **[SharedUID] Android System**.
+7. **Usage:**
     * Open your Quick Settings panel (click the clock/battery area in the dock).
     * You will see a new **Never Sleep** button at the beginning of the list.
     * Tap to toggle: The icon will highlight and text will update to show it is active.
