@@ -12,6 +12,7 @@ public final class MainHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) {
+        VolumeShortcutHook.init(lp);
         SettingsMenuHook.init(lp);
     }
 }

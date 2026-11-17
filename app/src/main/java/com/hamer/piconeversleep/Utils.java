@@ -6,9 +6,11 @@ import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Build;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 
 import java.lang.reflect.Method;
+import java.util.UUID;
 
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -18,6 +20,13 @@ public final class Utils {
     public static final String PROP_NEVER_SLEEP_VOLATILE = "pvr.factorytest.never.sleep";
     public static final String SETTING_NEVER_SLEEP = "pvr_never_sleep_enabled";
     public static final String MODULE_PACKAGE = "com.hamer.piconeversleep";
+
+    public static final String VSLEEP_ENABLED_KEY = "pico_vsleep_enabled";
+    public static final String COORD_REQUEST = "pico_power_coord_v2_request";
+    public static final String COORD_ACK = "pico_power_coord_v2_ack";
+    public static final String COORD_OWNER = "pico_power_coord_v2_effective_owner";
+    public static final String COORD_PHASE = "pico_power_coord_v2_phase";
+    public static final String VSLEEP_WAS_ENABLED_KEY = "pico_neversleep_vsleep_was_enabled";
 
     // Cached reflection references
     private static Method sGetPropMethod;
@@ -110,6 +119,79 @@ public final class Utils {
         }
     }
 
+    public static void ToggleNeverSleep(Context context, boolean targetEnabled) {
+        if (targetEnabled) {
+            boolean vsleepActive = GetGlobalInt(context, VSLEEP_ENABLED_KEY, 0) == 1
+                    && "vsleep".equals(GetGlobalString(context, COORD_OWNER))
+                    && "active".equals(GetGlobalString(context, COORD_PHASE));
+            PutGlobalInt(context, VSLEEP_WAS_ENABLED_KEY, vsleepActive ? 1 : 0);
+            requestPowerOwner(context, "enable");
+            PutGlobalInt(context, SETTING_NEVER_SLEEP, 1);
+            SetProp(PROP_NEVER_SLEEP_VOLATILE, "1");
+            XposedBridge.log(TAG + ": Never Sleep enabled; previous V-Sleep=" + vsleepActive);
+            StartGuardianDaemon(context);
+        } else {
+            PutGlobalInt(context, SETTING_NEVER_SLEEP, 0);
+            SetProp(PROP_NEVER_SLEEP_VOLATILE, "0");
+            requestPowerOwner(context, "disable");
+            XposedBridge.log(TAG + ": Never Sleep disabled; released power owner");
+            StopGuardianDaemon();
+            setDisplayPowerState(true);
+        }
+    }
+
+    private static void requestPowerOwner(Context context, String payload) {
+        String request = "2|" + UUID.randomUUID().toString() + "|power|" + payload;
+        PutGlobalString(context, COORD_REQUEST, request);
+        long deadline = System.currentTimeMillis() + 1500L;
+        while (System.currentTimeMillis() < deadline) {
+            if (request.equals(GetGlobalString(context, COORD_ACK))) return;
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        XposedBridge.log(TAG + ": power request not acknowledged immediately: " + payload);
+    }
+
+    private static void setDisplayPowerState(boolean on) {
+        if (Build.VERSION.SDK_INT != 29) {
+            XposedBridge.log(TAG + ": setDisplayPowerState skipped, not Android 10 (SDK 29)");
+            return;
+        }
+        try {
+            Class<?> surfaceControl = Class.forName("android.view.SurfaceControl");
+            IBinder token = null;
+
+            try {
+                Method getBuiltInDisplay = surfaceControl.getMethod("getBuiltInDisplay", int.class);
+                token = (IBinder) getBuiltInDisplay.invoke(null, 0);
+            } catch (Throwable ignored) {
+            }
+
+            if (token == null) {
+                try {
+                    Method getInternalToken = surfaceControl.getMethod("getInternalDisplayToken");
+                    token = (IBinder) getInternalToken.invoke(null);
+                } catch (Throwable ignored) {
+                }
+            }
+
+            if (token != null) {
+                Method setDisplayPowerMode = surfaceControl.getMethod("setDisplayPowerMode", IBinder.class, int.class);
+                int mode = on ? 2 : 0;
+                setDisplayPowerMode.invoke(null, token, mode);
+                XposedBridge.log(TAG + ": setDisplayPowerMode invoked successfully, mode=" + mode);
+            } else {
+                XposedBridge.log(TAG + ": Could not obtain display token via reflection");
+            }
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": setDisplayPowerState failed: " + t);
+        }
+    }
+
     public static void StartGuardianDaemon(Context context) {
         try {
             Context moduleContext = context.createPackageContext(Utils.MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
@@ -173,11 +255,29 @@ public final class Utils {
         }
     }
 
-    public static void PlayBeepSound(){
-        // Play confirmation beep sound
+    public static void PlayBeepSound(final boolean isEnable) {
         try {
-            ToneGenerator toneGen = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
-            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 250);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        ToneGenerator toneGen = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
+                        if (isEnable) {
+                            toneGen.startTone(ToneGenerator.TONE_PROP_NACK, 400);
+                            Thread.sleep(400);
+                            toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 400);
+                            Thread.sleep(400);
+                        } else {
+                            toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 400);
+                            Thread.sleep(400);
+                            toneGen.startTone(ToneGenerator.TONE_PROP_NACK, 400);
+                            Thread.sleep(400);
+                        }
+                        toneGen.release();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }).start();
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": Failed to play beep sound: " + t);
         }

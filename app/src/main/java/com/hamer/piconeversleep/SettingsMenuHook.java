@@ -1,12 +1,9 @@
 package com.hamer.piconeversleep;
 
-import static com.hamer.piconeversleep.Utils.PlayBeepSound;
-
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,29 +16,23 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import static com.hamer.piconeversleep.Utils.*;
 
 public final class SettingsMenuHook {
     private static final String SETTINGS_PACKAGE = "com.picovr.settings";
     private static final int NEVER_SLEEP_TILE = 9002;
     private static final String TILE_ADDED_KEY = "pico_neversleep_quick_added";
     private static final String TILE_INDEX_KEY = "pico_neversleep_quick_index";
-    private static final String VSLEEP_ENABLED_KEY = "pico_vsleep_enabled";
-    private static final String COORD_REQUEST = "pico_power_coord_v2_request";
-    private static final String COORD_ACK = "pico_power_coord_v2_ack";
-    private static final String COORD_OWNER = "pico_power_coord_v2_effective_owner";
-    private static final String COORD_PHASE = "pico_power_coord_v2_phase";
-    private static final String VSLEEP_WAS_ENABLED_KEY = "pico_neversleep_vsleep_was_enabled";
     private static volatile Object sButton;
 
     public static void init(XC_LoadPackage.LoadPackageParam lp) {
         if (!SETTINGS_PACKAGE.equals(lp.packageName)) return;
-        XposedBridge.log(Utils.TAG + ": Hooking " + lp.packageName + " quick setting");
+        XposedBridge.log(TAG + ": Hooking " + lp.packageName + " quick setting");
         hookSystemReady(lp);
 
         try {
@@ -63,7 +54,7 @@ public final class SettingsMenuHook {
                                     }
                                 }
                             } catch (Throwable t) {
-                                XposedBridge.log(Utils.TAG + ": onBindViewHolder hook error: " + t);
+                                XposedBridge.log(TAG + ": onBindViewHolder hook error: " + t);
                             }
                         }
                     });
@@ -87,9 +78,9 @@ public final class SettingsMenuHook {
             });
             installEditorHooks(lp.classLoader);
 
-            XposedBridge.log(Utils.TAG + ": Hooks installed successfully");
+            XposedBridge.log(TAG + ": Hooks installed successfully");
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": Failed to install hooks: " + t);
+            XposedBridge.log(TAG + ": Failed to install hooks: " + t);
         }
     }
 
@@ -120,9 +111,9 @@ public final class SettingsMenuHook {
             };
             XposedHelpers.findAndHookMethod(added, "m", XposedHelpers.findClass("com.picovr.adapters.QuickPanelAddedAdapter$AddedHolder", cl), int.class, bind);
             XposedHelpers.findAndHookMethod(more, "c", XposedHelpers.findClass("com.picovr.adapters.QuickPanelMoreAdapter$MoreHolder", cl), int.class, bind);
-            XposedBridge.log(Utils.TAG + ": editor hooks installed");
+            XposedBridge.log(TAG + ": editor hooks installed");
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": editor hooks unavailable " + t);
+            XposedBridge.log(TAG + ": editor hooks unavailable " + t);
         }
     }
 
@@ -173,7 +164,7 @@ public final class SettingsMenuHook {
     private static void addEditorTile(List<?> added, List<?> more, ClassLoader cl) {
         try {
             Object context = currentApplication();
-            int state = Utils.GetGlobalInt((Context) context, TILE_ADDED_KEY, 1);
+            int state = GetGlobalInt((Context) context, TILE_ADDED_KEY, 1);
             List target = state == 1 ? added : more;
             for (Object item : added) if (panelType(item) == NEVER_SLEEP_TILE) return;
             for (Object item : more) if (panelType(item) == NEVER_SLEEP_TILE) return;
@@ -181,11 +172,11 @@ public final class SettingsMenuHook {
             if (template == null) return;
             Class<?> itemClass = XposedHelpers.findClass("com.picovr.database.quickpanel.QuickPanelItem", cl);
             Constructor<?> c = itemClass.getConstructor(int.class, int.class, int.class, int.class, int.class, String.class);
-            int index = clampIndex(Utils.GetGlobalInt((Context) context, TILE_INDEX_KEY, target.size()), target.size());
+            int index = clampIndex(GetGlobalInt((Context) context, TILE_INDEX_KEY, target.size()), target.size());
             target.add(index, c.newInstance(NEVER_SLEEP_TILE, index, state, panelName(template), panelIcon(template), "neversleep"));
-            XposedBridge.log(Utils.TAG + ": editor tile added state=" + state + " index=" + index + " addedSize=" + added.size() + " moreSize=" + more.size());
+            XposedBridge.log(TAG + ": editor tile added state=" + state + " index=" + index + " addedSize=" + added.size() + " moreSize=" + more.size());
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": editor tile injection failed " + t);
+            XposedBridge.log(TAG + ": editor tile injection failed " + t);
         }
     }
 
@@ -198,20 +189,20 @@ public final class SettingsMenuHook {
                 for (Object item : list) {
                     if (panelType(item) == NEVER_SLEEP_TILE) {
                         isAdded = panelAdded(item);
-                        Utils.PutGlobalInt((Context) context, TILE_ADDED_KEY, isAdded ? 1 : 0);
+                        PutGlobalInt((Context) context, TILE_ADDED_KEY, isAdded ? 1 : 0);
                         int savedIndex = list.indexOf(item);
                         if (savedIndex < 0) savedIndex = panelIndex(item);
                         if (savedIndex < 0) savedIndex = 0;
-                        Utils.PutGlobalInt((Context) context, TILE_INDEX_KEY, savedIndex);
-                        XposedBridge.log(Utils.TAG + ": saved editable tile state added=" + (isAdded ? 1 : 0) + " index=" + savedIndex);
+                        PutGlobalInt((Context) context, TILE_INDEX_KEY, savedIndex);
+                        XposedBridge.log(TAG + ": saved editable tile state added=" + (isAdded ? 1 : 0) + " index=" + savedIndex);
                     } else {
                         copy.add(item);
                     }
                 }
             }
             if (!isAdded && context != null) {
-                Utils.PutGlobalInt((Context) context, TILE_ADDED_KEY, 0);
-                XposedBridge.log(Utils.TAG + ": saved editable tile state added=0");
+                PutGlobalInt((Context) context, TILE_ADDED_KEY, 0);
+                XposedBridge.log(TAG + ": saved editable tile state added=0");
             }
             return copy;
         } catch (Throwable t) {
@@ -221,7 +212,7 @@ public final class SettingsMenuHook {
                     if (panelType(item) != NEVER_SLEEP_TILE) filtered.add(item);
                 }
             }
-            XposedBridge.log(Utils.TAG + ": editable tile save failed; filtered virtual tile: " + t);
+            XposedBridge.log(TAG + ": editable tile save failed; filtered virtual tile: " + t);
             return filtered;
         }
     }
@@ -260,12 +251,13 @@ public final class SettingsMenuHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     final Context context = (Context) param.thisObject;
-                    XposedBridge.log(Utils.TAG + ": SettingApplication onCreate reached, syncing props");
+                    XposedBridge.log(TAG + ": SettingApplication onCreate reached, syncing props");
                     syncProps(context);
+                    registerNeverSleepObserver(context);
                 }
             });
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": Failed to hook Application onCreate: " + t);
+            XposedBridge.log(TAG + ": Failed to hook Application onCreate: " + t);
         }
     }
 
@@ -292,15 +284,15 @@ public final class SettingsMenuHook {
                             }
                         }
 
-                        if (Utils.GetGlobalInt(context, TILE_ADDED_KEY, 1) == 1 && !hasTile(list, NEVER_SLEEP_TILE)) {
+                        if (GetGlobalInt(context, TILE_ADDED_KEY, 1) == 1 && !hasTile(list, NEVER_SLEEP_TILE)) {
                             try {
                                 Class<?> infoClass = XposedHelpers.findClass("com.picovr.quicksettings.button.QuickSettingButtonInfo", cl);
                                 Object item = XposedHelpers.newInstance(infoClass);
                                 XposedHelpers.callMethod(item, "m", NEVER_SLEEP_TILE);
-                                int index = clampIndex(Utils.GetGlobalInt(context, TILE_INDEX_KEY, 0), list.size());
+                                int index = clampIndex(GetGlobalInt(context, TILE_INDEX_KEY, 0), list.size());
                                 list.add(index, item);
                             } catch (Throwable t) {
-                                XposedBridge.log(Utils.TAG + ": Tile injection failed: " + t);
+                                XposedBridge.log(TAG + ": Tile injection failed: " + t);
                             }
                         }
                     }
@@ -338,15 +330,15 @@ public final class SettingsMenuHook {
             int current = list.indexOf(tile);
             int wanted = TilePositionPolicy.normalizedIndex(
                     current,
-                    Utils.GetGlobalInt(context, TILE_INDEX_KEY, 0),
+                    GetGlobalInt(context, TILE_INDEX_KEY, 0),
                     list.size());
             if (current != wanted) {
                 list.remove(tile);
                 list.add(wanted, tile);
             }
-            XposedBridge.log(Utils.TAG + ": runtime tile normalized=" + list.indexOf(tile));
+            XposedBridge.log(TAG + ": runtime tile normalized=" + list.indexOf(tile));
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": runtime tile normalization failed: " + t);
+            XposedBridge.log(TAG + ": runtime tile normalization failed: " + t);
         }
     }
 
@@ -368,7 +360,7 @@ public final class SettingsMenuHook {
             if (position < 0 || position >= data.size()) return;
             Object item = data.get(position);
             if (buttonType(item) != NEVER_SLEEP_TILE) return;
-            XposedBridge.log(Utils.TAG + ": binding quick tile position=" + position + " type=" + buttonType(item));
+            XposedBridge.log(TAG + ": binding quick tile position=" + position + " type=" + buttonType(item));
 
             final View button = (View) XposedHelpers.getObjectField(holder, "a");
             final Context context = button.getContext();
@@ -387,7 +379,8 @@ public final class SettingsMenuHook {
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
-                            toggleNeverSleep(context, nextState);
+                            PlayBeepSound(nextState);
+                            ToggleNeverSleep(context, nextState);
                         }
                     }).start();
                 }
@@ -398,7 +391,7 @@ public final class SettingsMenuHook {
             itemView.setOnClickListener(listener);
             itemView.setClickable(true);
             sButton = button;
-            XposedBridge.log(Utils.TAG + ": quick tile configured position=" + position);
+            XposedBridge.log(TAG + ": quick tile configured position=" + position);
             button.post(new Runnable() {
                 @Override
                 public void run() {
@@ -406,105 +399,53 @@ public final class SettingsMenuHook {
                 }
             });
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": configureButton failed: " + t);
+            XposedBridge.log(TAG + ": configureButton failed: " + t);
         }
-    }
-
-    private static void toggleNeverSleep(Context context, boolean targetEnabled) {
-        if (targetEnabled) {
-            boolean vsleepActive = Utils.GetGlobalInt(context, VSLEEP_ENABLED_KEY, 0) == 1
-                    && "vsleep".equals(Utils.GetGlobalString(context, COORD_OWNER))
-                    && "active".equals(Utils.GetGlobalString(context, COORD_PHASE));
-            Utils.PutGlobalInt(context, VSLEEP_WAS_ENABLED_KEY, vsleepActive ? 1 : 0);
-            requestPowerOwner(context, "enable");
-            Utils.PutGlobalInt(context, Utils.SETTING_NEVER_SLEEP, 1);
-            Utils.SetProp(Utils.PROP_NEVER_SLEEP_VOLATILE, "1");
-            XposedBridge.log(Utils.TAG + ": Never Sleep enabled; previous V-Sleep=" + vsleepActive);
-            Utils.StartGuardianDaemon(context);
-        } else {
-            Utils.PutGlobalInt(context, Utils.SETTING_NEVER_SLEEP, 0);
-            Utils.SetProp(Utils.PROP_NEVER_SLEEP_VOLATILE, "0");
-            requestPowerOwner(context, "disable");
-            XposedBridge.log(Utils.TAG + ": Never Sleep disabled; released power owner");
-            Utils.StopGuardianDaemon();
-            setDisplayPowerState(true);
-        }
-        PlayBeepSound();
-    }
-
-    private static void setDisplayPowerState(boolean on) {
-        if (Build.VERSION.SDK_INT != 29) {
-            XposedBridge.log(Utils.TAG + ": setDisplayPowerState skipped, not Android 10 (SDK 29)");
-            return;
-        }
-        try {
-            Class<?> surfaceControl = Class.forName("android.view.SurfaceControl");
-            IBinder token = null;
-
-            try {
-                Method getBuiltInDisplay = surfaceControl.getMethod("getBuiltInDisplay", int.class);
-                token = (IBinder) getBuiltInDisplay.invoke(null, 0);
-            } catch (Throwable ignored) {
-            }
-
-            if (token == null) {
-                try {
-                    Method getInternalToken = surfaceControl.getMethod("getInternalDisplayToken");
-                    token = (IBinder) getInternalToken.invoke(null);
-                } catch (Throwable ignored) {
-                }
-            }
-
-            if (token != null) {
-                Method setDisplayPowerMode = surfaceControl.getMethod("setDisplayPowerMode", IBinder.class, int.class);
-                int mode = on ? 2 : 0;
-                setDisplayPowerMode.invoke(null, token, mode);
-                XposedBridge.log(Utils.TAG + ": setDisplayPowerMode invoked successfully, mode=" + mode);
-            } else {
-                XposedBridge.log(Utils.TAG + ": Could not obtain display token via reflection");
-            }
-        } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": setDisplayPowerState failed: " + t);
-        }
-    }
-
-    private static void requestPowerOwner(Context context, String payload) {
-        String request = "2|" + UUID.randomUUID().toString() + "|power|" + payload;
-        Utils.PutGlobalString(context, COORD_REQUEST, request);
-        long deadline = System.currentTimeMillis() + 1500L;
-        while (System.currentTimeMillis() < deadline) {
-            if (request.equals(Utils.GetGlobalString(context, COORD_ACK))) return;
-            try {
-                Thread.sleep(50L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-        XposedBridge.log(Utils.TAG + ": power request not acknowledged immediately: " + payload);
     }
 
     private static void syncProps(Context context) {
         try {
-            int enabled = Utils.GetGlobalInt(context, Utils.SETTING_NEVER_SLEEP, 0);
+            int enabled = GetGlobalInt(context, SETTING_NEVER_SLEEP, 0);
             String val = String.valueOf(enabled);
-            String volatileVal = Utils.GetProp(Utils.PROP_NEVER_SLEEP_VOLATILE, "0");
+            String volatileVal = GetProp(PROP_NEVER_SLEEP_VOLATILE, "0");
             if (!val.equals(volatileVal)) {
-                Utils.SetProp(Utils.PROP_NEVER_SLEEP_VOLATILE, val);
-                XposedBridge.log(Utils.TAG + ": Synced volatile prop to " + val);
+                SetProp(PROP_NEVER_SLEEP_VOLATILE, val);
+                XposedBridge.log(TAG + ": Synced volatile prop to " + val);
             }
             if (isNeverSleepEnabled(context)) {
-                Utils.StartGuardianDaemon(context);
+                StartGuardianDaemon(context);
             } else {
-                Utils.StopGuardianDaemon();
+                StopGuardianDaemon();
             }
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": syncProps failed: " + t);
+            XposedBridge.log(TAG + ": syncProps failed: " + t);
         }
     }
-    
+
+    private static void registerNeverSleepObserver(final Context context) {
+        try {
+            android.database.ContentObserver observer = new android.database.ContentObserver(new Handler(Looper.getMainLooper())) {
+                @Override
+                public void onChange(boolean selfChange) {
+                    super.onChange(selfChange);
+                    boolean enabled = isNeverSleepEnabled(context);
+                    XposedBridge.log(TAG + ": Never Sleep setting changed externally, refreshing tile to " + enabled);
+                    refreshTile(context, enabled);
+                }
+            };
+            context.getContentResolver().registerContentObserver(
+                    android.provider.Settings.Global.getUriFor(SETTING_NEVER_SLEEP),
+                    true,
+                    observer
+            );
+            XposedBridge.log(TAG + ": Registered ContentObserver for SETTING_NEVER_SLEEP");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Failed to register ContentObserver: " + t);
+        }
+    }
+
     private static boolean isNeverSleepEnabled(Context context) {
-        return Utils.GetGlobalInt(context, Utils.SETTING_NEVER_SLEEP, 0) == 1;
+        return GetGlobalInt(context, SETTING_NEVER_SLEEP, 0) == 1;
     }
 
     private static void refreshTile(final Context context, final Boolean forcedState) {
@@ -539,7 +480,7 @@ public final class SettingsMenuHook {
                             }
                         }
                     } catch (Throwable t) {
-                        XposedBridge.log(Utils.TAG + ": refreshTile UI update failed: " + t);
+                        XposedBridge.log(TAG + ": refreshTile UI update failed: " + t);
                     }
                 }
             };
@@ -550,7 +491,7 @@ public final class SettingsMenuHook {
                 ((View) button).post(updateTask);
             }
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": refreshTile failed: " + t);
+            XposedBridge.log(TAG + ": refreshTile failed: " + t);
         }
     }
 
@@ -568,15 +509,15 @@ public final class SettingsMenuHook {
 
     private static Drawable getModuleDrawable(Context context) {
         try {
-            Context moduleContext = context.createPackageContext(Utils.MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
-            int id = moduleContext.getResources().getIdentifier("ic_launcher_foreground", "mipmap", Utils.MODULE_PACKAGE);
+            Context moduleContext = context.createPackageContext(MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
+            int id = moduleContext.getResources().getIdentifier("ic_launcher_foreground", "mipmap", MODULE_PACKAGE);
             if (id == 0)
-                id = moduleContext.getResources().getIdentifier("ic_launcher", "mipmap", Utils.MODULE_PACKAGE);
+                id = moduleContext.getResources().getIdentifier("ic_launcher", "mipmap", MODULE_PACKAGE);
             if (id == 0)
-                id = moduleContext.getResources().getIdentifier("ic_launcher", "drawable", Utils.MODULE_PACKAGE);
+                id = moduleContext.getResources().getIdentifier("ic_launcher", "drawable", MODULE_PACKAGE);
             if (id != 0) return moduleContext.getResources().getDrawable(id, null);
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": Failed to load module icon: " + t);
+            XposedBridge.log(TAG + ": Failed to load module icon: " + t);
         }
         return null;
     }
@@ -591,11 +532,11 @@ public final class SettingsMenuHook {
 
     private static String getModuleString(Context context, String name) {
         try {
-            Context moduleContext = context.createPackageContext(Utils.MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
-            int id = moduleContext.getResources().getIdentifier(name, "string", Utils.MODULE_PACKAGE);
+            Context moduleContext = context.createPackageContext(MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY);
+            int id = moduleContext.getResources().getIdentifier(name, "string", MODULE_PACKAGE);
             if (id != 0) return moduleContext.getString(id);
         } catch (Throwable t) {
-            XposedBridge.log(Utils.TAG + ": Failed to load module string: " + t);
+            XposedBridge.log(TAG + ": Failed to load module string: " + t);
         }
         return "Never Sleep";
     }
