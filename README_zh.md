@@ -20,7 +20,8 @@ PicoNeverSleep 是一款专为 Pico VR 头显设计的 LSPosed 模块，可在�
 * **🌙 永不休眠切换：** 直接从“快捷设置”中轻松防止头显进入休眠状态。
 * **🔄 重启后保持：** 通过挂钩应用启动阶段，在设备重启后自动恢复您的“永不休眠”状态。
 * **🔌 自动熄屏**：基于 Psensor 和系统默认超时设置自动关闭屏幕但保持不进入休眠状态。
-* **🌐 多语言支持：** 完全本地化，支持 27+ 种语言，包括英语、中文、日语、韩语和多种欧洲语言。
+* **🔊 音量快捷键：** 同时按住“音量上 + 音量下”保持 2 秒，即可**切换**“永不休眠”状态（伴随双音阶确认蜂鸣声：开启为低-高，关闭为高-低）。
+* **🌐 多语言支持：** 完全本地化，支持 27+ 种语言，包括英语, 中文, 日语, 韩语和多种欧洲语言。
 * **🧹 纯粹专注：** 单一用途模块，无多余功能，不产生额外后台耗电。
 
 ## ⛏️ 必备条件
@@ -29,33 +30,32 @@ PicoNeverSleep 是一款专为 Pico VR 头显设计的 LSPosed 模块，可在�
 * **超级用户：** 需要 **[Root 权限](https://github.com/chaixshot/more-picohaxx)** 以修改系统文件。
 * **环境：** 必须安装并激活 **[LSPosed 框架](https://github.com/JingMatrix/Vector/releases/tag/v2.0)**。
 * **权限：** 应用请求时请授予 Root 权限。
-* **LSPosed 作用域：** 确保在 LSPosed 模块作用域中勾选了 `PicoVR Settings (com.picovr.settings)`。
+* **LSPosed 作用域：** 确保在 LSPosed 模块作用域中勾选了 `System Framework (android)` 和 `PicoVR Settings (com.picovr.settings)`。
 
 ## 📐 如何使用？
 
 1. 在您的头显上 **安装** `PicoNeverSleep.apk`。
 2. **打开** LSPosed Manager 应用。
 3. **启用** PicoNeverSleep 模块。
-4. **检查作用域：** 确保勾选了 `PicoVR Settings`。
+4. **检查作用域：** 确保同时勾选了 `System Framework` 和 `PicoVR Settings`。
 5. **重启** 设备以激活挂钩。
 6. **Magisk 超级用户：** 打开 **Magisk** 应用，进入“超级用户”选项卡，并向 **[SharedUID] Android System** 授予 Root 权限。
 7. **使用方法：**
-    * 打开“快捷设置”面板（点击 Dock 栏中的时钟/电池区域）。
-    * 您将在列表开头看到一个新的 **永不休眠** 按钮。
-    * 点击即可切换：图标将高亮显示，文字也将更新以指示已激活。
+    * **快捷设置：** 打开“快捷设置”面板并点击 **永不休眠** 按钮进行切换。
+    * **音量快捷键：** 在设备的任何界面同时按住“音量上 + 音量下”键 **2 秒钟**，即可**切换**“永不休眠”的开启或关闭状态。
 
 ## ⁉️ 为什么按钮没有出现？
 
 * 确保您已在 **LSPosed Manager** 中启用了该模块。
-* 仔细检查是否已勾选 **com.picovr.settings** 作用域。
+* 仔细检查是否同时勾选了 **android** 和 **com.picovr.settings** 作用域。
 * 首次启用模块后，您 **必须重启** 头显（或至少重启“设置”应用）。
 
 ## ⁉️ 它是如何工作的？
 
-该模块挂钩至 `com.picovr.settings`，以将自定义快捷磁贴注入到快捷设置适配器中。
+该模块挂钩至 `com.picovr.settings` 以在快捷设置适配器中注入自定义磁贴，并通过 `PhoneWindowManager` 挂钩至 `system_server` 以监听全局音量按键快捷方式。
 
 * 通过切换系统属性 `pvr.factorytest.never.sleep` 来控制休眠行为。
-* 由于 Pico OS 在每次开机时都会将此属性重置为 `0`，因此该模块还挂钩了“设置”应用的启动，以便在系统启动完成后立即从持久化的 `Settings.Global` 变量中恢复您保存的状态。
+* 由于 Pico OS 在每次开机时都会将此属性重置为 `0`，因此该模块还挂钩了系统服务启动阶段，以便在系统启动完成后立即从持久化的 `Settings.Global` 变量中恢复您保存的状态。
 
 ## 🔃 语言支持
 
