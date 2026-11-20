@@ -8,7 +8,7 @@ import java.io.FileWriter;
 import java.lang.reflect.Method;
 
 public class GuardianDaemon {
-    private static final String TAG = "[PicoNeverSleep]";
+    private static final String TAG = "PicoNeverSleepDaemon";
 
     private static volatile boolean sDisplayPowerOn = true;
     private static Method sSystemPropGetMethod;
