@@ -184,14 +184,15 @@ public final class SettingsMenuHook {
         try {
             Object context = currentApplication();
             ArrayList copy = new ArrayList();
-            boolean isAdded = false;
+            boolean foundTile = false;
             if (list != null) {
                 for (Object item : list) {
                     if (panelType(item) == NEVER_SLEEP_TILE) {
-                        isAdded = panelAdded(item);
+                        foundTile = true;
+                        boolean isAdded = panelAdded(item);
                         PutGlobalInt((Context) context, TILE_ADDED_KEY, isAdded ? 1 : 0);
-                        int savedIndex = list.indexOf(item);
-                        if (savedIndex < 0) savedIndex = panelIndex(item);
+                        int savedIndex = panelIndex(item);
+                        if (savedIndex < 0) savedIndex = list.indexOf(item);
                         if (savedIndex < 0) savedIndex = 0;
                         PutGlobalInt((Context) context, TILE_INDEX_KEY, savedIndex);
                         XposedBridge.log(TAG + ": saved editable tile state added=" + (isAdded ? 1 : 0) + " index=" + savedIndex);
@@ -200,9 +201,8 @@ public final class SettingsMenuHook {
                     }
                 }
             }
-            if (!isAdded && context != null) {
-                PutGlobalInt((Context) context, TILE_ADDED_KEY, 0);
-                XposedBridge.log(TAG + ": saved editable tile state added=0");
+            if (!foundTile) {
+                return list;
             }
             return copy;
         } catch (Throwable t) {
